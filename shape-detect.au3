@@ -2,31 +2,22 @@
 #include <file.au3>
 #include <math.au3>
 
-   $filename = '1.png'
-
-
-
-
-   local $x_points[0]
-   local $y_points[0]
-
+   const $filename = '1.png'
+   const $area_min = 500		; maybe this could be dynamically set based on input image dimensions
+   const $area_max = 80000		; ^
 
    $command = 'magick 1.png -negate -define connected-components:verbose=true -connected-components 4 -auto-level -depth 8 islands.png > islands.txt'
    runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
 
-   $area_min = 500
-   $area_max = 80000
-
-
-
    $islands = FileReadToArray('islands.txt')
-   for $j = 2 to 2 ;ubound($islands) - 1
+   for $j = 1 to ubound($islands) - 1
+	  local $x_points[0]
+	  local $y_points[0]
 	  $split = stringsplit($islands[$j], ' ', 2)
 	  $area  = $split[5]
 	  if ($area > $area_min) and ($area < $area_max) then
 		 $geometry = $split[3]
 		 $split = stringsplit($split[3], 'x+', 2)
-		 ;_ArrayDisplay($split, 'geometry')
 		 $x = $split[0]
 		 $y = $split[1]
 		 $x_offset = $split[2]
@@ -74,58 +65,68 @@
 
 		 ;make array for the x and y positions for all white edge pixels
 		 $pixels = FileReadToArray('pixels.txt')
-		 ;_ArrayDisplay($pixels, 'pixels')
 		 for $k = 1 to ubound($pixels) - 1
 			if StringInStr($pixels[$k], 'FF') then
 			   $split = stringsplit($pixels[$k], ',:', 2)
 			   _arrayadd($x_points, $split[0])
 			   _arrayadd($y_points, $split[1])
-
 			endif
-
 		 next
 
-	  local $waveform[0]
-	  msgbox(1, 'waveform array size', ubound($waveform))
+	  ;construct waveform
+	  local $dists[360]
 	  for $k = 0 to ubound($x_points) - 1
 		 $x1 = $x_points[$k]
 		 $y1 = $y_points[$k]
 		 $x2 = $x_center
 		 $y2 = $y_center
-		 ;msgbox(1,'angle', 'angle: ' & _degree(angle($x1, $y1, $x2, $y2)) & '  x1:' & $x1 & ',y1:' & $y1 & ' x2:' & $x2 & ',y2:' & $y2)
-		 $angle  = _degree(angle($x1, $y1, $x2, $y2))
-		 $distance = int(distance($x1, $x2, $y1, $y2))
 
-		 $w1 = int($angle)
-		 $w2 = 0
-		 $w3 = int($angle)
-		 $w4 = $distance
-		 _ArrayAdd($waveform, 'line ' & $w1 &','& $w2 &' '& $w3 &','& $w4)
+		 $angle  = int(_degree(angle($x1, $y1, $x2, $y2)))
+		 $distance = int(distance($x1, $x2, $y1, $y2))
+		 if $distance > $dists[$angle] then $dists[$angle] = $distance
+
 	  next
 
+	  ;fill in gaps of the waveform
+	  $gaps = true
+	  while $gaps
+		 $gaps = false
+		 for $k = 0 to 359
+			if $dists[$k] = '' then
+			   $pre1 = mod($k - 1, 360)
+			   $pre2 = mod($k - 2, 360)
+			   if $pre1 < 0 Then $pre1 += 360
+			   if $pre2 < 0 Then $pre2 += 360
+			   $pre1 = $dists[$pre1]
+			   $pre2 = $dists[$pre2]
+			   if $pre2 = '' or $pre1 = '' then $gaps = true
+
+			   $dists[$k] = ($pre1 - $pre2) + $pre2
+
+			endif
+
+		 next
+	  wend
+
+	  ;convert waveform into an array of strings of lines for imagemagick to draw
+	  local $waveform[360]
+	  for $k = 0  to 359
+		 $waveform[$k] = 'line ' & $k &','& 0 &' '& $k &','& $dists[$k]
+	  next
 	  $lines = FileOpen('lines.txt', 10)
 	  FileWrite($lines, '')
-	  msgbox(1,'paused', 'check to make sure the textfiles are empty??')
 	  _FileWriteFromArray($lines, $waveform)
 	  FileClose($lines)
 
+	  ;draw and output the waveform
 	  $command = 'magick -size 360x300 xc:white -stroke black -draw @lines.txt waveform' & $j & '.png'
+	  clipput($command)
 	  runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-	  ;msgbox(1,'paused', 'just made waveform')
-
-
-
-
-
-
+	  msgbox(1,'paused', 'just made waveform')
 
 	  endif
 
    next
-
-
-
-
 
 
 
