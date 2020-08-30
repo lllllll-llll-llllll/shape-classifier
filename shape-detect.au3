@@ -25,6 +25,8 @@
 		 $x_center = int($x / 2)
 		 $y_center = int($y / 2)
 
+		 $command = 'magick ' & $filename & ' -crop ' & $geometry & ' shape' & $j & '.png'
+		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
 
 		 ;convert bounding box of object into a bunch of lines drawing the object boundaries. it is messy
 		 $command = 'magick ' & $filename & ' -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -canny 1x1+50%+90% -crop ' & $x+1 & 'x' & $y+1 & '+' & $x_offset+1 & '+' & $y_offset+1 & ' edges.png'
@@ -73,59 +75,100 @@
 			endif
 		 next
 
-	  ;construct waveform
-	  local $dists[360]
-	  for $k = 0 to ubound($x_points) - 1
-		 $x1 = $x_points[$k]
-		 $y1 = $y_points[$k]
-		 $x2 = $x_center
-		 $y2 = $y_center
+		 ;construct waveform
+		 local $dists[360]
+		 for $k = 0 to ubound($x_points) - 1
+			$x1 = $x_points[$k]
+			$y1 = $y_points[$k]
+			$x2 = $x_center
+			$y2 = $y_center
 
-		 $angle  = int(_degree(angle($x1, $y1, $x2, $y2)))
-		 $distance = int(distance($x1, $x2, $y1, $y2))
-		 if $distance > $dists[$angle] then $dists[$angle] = $distance
-
-	  next
-
-	  ;fill in gaps of the waveform
-	  $gaps = true
-	  while $gaps
-		 $gaps = false
-		 for $k = 0 to 359
-			if $dists[$k] = '' then
-			   $pre1 = mod($k - 1, 360)
-			   $pre2 = mod($k - 2, 360)
-			   if $pre1 < 0 Then $pre1 += 360
-			   if $pre2 < 0 Then $pre2 += 360
-			   $pre1 = $dists[$pre1]
-			   $pre2 = $dists[$pre2]
-			   if $pre2 = '' or $pre1 = '' then $gaps = true
-
-			   $dists[$k] = ($pre1 - $pre2) + $pre2
-
-			endif
+			$angle  = int(_degree(angle($x1, $y1, $x2, $y2)))
+			$distance = int(distance($x1, $x2, $y1, $y2))
+			if $distance > $dists[$angle] then $dists[$angle] = $distance
 
 		 next
-	  wend
 
-	  ;convert waveform into an array of strings of lines for imagemagick to draw
-	  local $waveform[360]
-	  for $k = 0  to 359
-		 $waveform[$k] = 'line ' & $k &','& 0 &' '& $k &','& $dists[$k]
-	  next
-	  $lines = FileOpen('lines.txt', 10)
-	  FileWrite($lines, '')
-	  _FileWriteFromArray($lines, $waveform)
-	  FileClose($lines)
+		 ;fill in gaps of the waveform
+		 $max = 0
+		 $min = 9999
+		 $gaps = true
+		 while $gaps
+			$gaps = false
+			for $k = 0 to 359
+			   if $dists[$k] > $max then $max = $dists[$k]
 
-	  ;draw and output the waveform
-	  $command = 'magick -size 360x300 xc:white -stroke black -draw @lines.txt waveform' & $j & '.png'
-	  clipput($command)
-	  runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-	  msgbox(1,'paused', 'just made waveform')
+			   if $dists[$k] = '' then
+				  $pre1 = mod($k - 1, 360)
+				  $pre2 = mod($k - 2, 360)
+				  if $pre1 < 0 Then $pre1 += 360
+				  if $pre2 < 0 Then $pre2 += 360
+				  $pre1 = $dists[$pre1]
+				  $pre2 = $dists[$pre2]
+				  if $pre2 = '' or $pre1 = '' then $gaps = true
+
+				  $dists[$k] = ($pre1 - $pre2) + $pre2
+			   else
+				  if $dists[$k] < $min then $min = $dists[$k]
+			   endif
+
+			next
+		 wend
+
+		 ;convert waveform into an array of strings of lines for imagemagick to draw
+		 local $waveform[360]
+		 for $k = 0  to 359
+			$waveform[$k] = 'line ' & $k &','& 0 &' '& $k &','& $dists[$k]
+		 next
+		 $lines = FileOpen('lines.txt', 10)
+		 FileWrite($lines, '')
+		 _FileWriteFromArray($lines, $waveform)
+		 FileClose($lines)
+
+		 ;draw and output the waveform
+		 $command = 'magick -size 360x300 xc:white -stroke black -draw @lines.txt waveform' & $j & '.png'
+		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+		 ;msgbox(1,'paused', 'just made waveform')
+
+
+
+		 ; construct barcode
+		 $dif = $min / $max
+		 local $barcode[360]
+		 for $k = 0 to 359
+			;if $dists[$k] > $max / 2 then
+			;if $dists[$k] > $max * 0.7 then
+			;msgbox(1,'', (($max - $min) / 2) + $min)
+			if $dists[$k]  > (($max - $min) / 2) + $min then
+			;if $dists[$k] > ((($max - $min) / 2) + $min * (1 - $dif / 2) )  then
+			   $barcode[$k] = 1
+			else
+			   $barcode[$k] = 0
+			endif
+		 next
+
+		 ;convert barcode into an array of strings of lines for imagemagick to draw
+		 local $barcode_text[360]
+		 for $k = 0  to 359
+			$barcode_text[$k] = 'line ' & $k &','& 0 &' '& $k &','& $barcode[$k] * 300
+		 next
+		 $bars = FileOpen('barcode.txt', 10)
+		 FileWrite($bars, '')
+		 _FileWriteFromArray($bars, $barcode_text)
+		 FileClose($bars)
+
+		 ;draw and output the barcode
+		 $command = 'magick -size 360x300 xc:white -stroke black -draw @barcode.txt barcode' & $j & '.png'
+		 clipput($command)
+		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+		 ;msgbox(1,'paused', $j & ' difference: ' & $dif)
+
+
+
+
+
 
 	  endif
-
    next
 
 
