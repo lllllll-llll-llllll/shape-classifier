@@ -31,15 +31,15 @@
 		 $x_center = int($x / 2)
 		 $y_center = int($y / 2)
 
-			;color data for the target object --> $color[r, g, b]
-			$colors = StringReplace($colors, '%', '')
-			$split = stringsplit($colors, '()', 2)
-			$colors = $split[1]
-			$split = stringsplit($colors, ',', 2)
-			$red   = round(255 * number($split[0]) / 100)
-			$green = round(255 * number($split[1]) / 100)
-			$blue  = round(255 * number($split[2]) / 100)
-			$colors = 'rgb(' & $red & ',' & $green & ',' & $blue & ')'
+		;color data for the target object --> $color[r, g, b]
+		$colors = StringReplace($colors, '%', '')
+		$split = stringsplit($colors, '()', 2)
+		$colors = $split[1]
+		$split = stringsplit($colors, ',', 2)
+		$red   = round(255 * number($split[0]) / 100)
+		$green = round(255 * number($split[1]) / 100)
+		$blue  = round(255 * number($split[2]) / 100)
+		$colors = 'rgb(' & $red & ',' & $green & ',' & $blue & ')'
 
 		 $command = 'magick islands.png -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -fill black +opaque ' & $colors & ' -fill white -opaque ' & $colors & ' -canny 1x1+50%+90% -threshold 50% -type bilevel pixels.txt'
 		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
