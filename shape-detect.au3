@@ -2,20 +2,26 @@
 #include <file.au3>
 #include <math.au3>
 
-   const $filename = '1.png'
-   const $area_min = 500		; maybe this could be dynamically set based on input image dimensions
+   const $filename = 'input.png'
+   const $area_min = 1000		; maybe this could be dynamically set based on input image dimensions
    const $area_max = 80000		; ^
 
-   $command = 'magick 1.png -negate -define connected-components:verbose=true -connected-components 4 -auto-level -depth 8 islands.png > islands.txt'
+   $command = 'magick '& $filename & ' -negate -connected-components 4 -auto-level -depth 8 -sepia-tone 50% -define connected-components:verbose=true -connected-components 4 -auto-level -depth 8 -sepia-tone 50% islands.png > islands.txt'
    runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
 
+   ;$command = 'magick islands.png -negate -define connected-components:verbose=true -connected-components 4 -auto-level -depth 8 islands2.png > islands2.txt'
+   ;runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+
    $islands = FileReadToArray('islands.txt')
-   for $j = 1 to ubound($islands) - 1
+   for $j = 2 to ubound($islands) - 1
 	  local $x_points[0]
 	  local $y_points[0]
 	  $split = stringsplit($islands[$j], ' ', 2)
 	  $area  = $split[5]
+	  $colors = stringtrimleft($split[6], 1)
+	  $colors = stringreplace($colors, '%', '%%')
 	  if ($area > $area_min) and ($area < $area_max) then
+		 ; [] [] [0:] [618x395+0+0] [306.1,198.4] [212077] [srgb(10.4182%,0.828823%,6.20975e-07%)]
 		 $geometry = $split[3]
 		 $split = stringsplit($split[3], 'x+', 2)
 		 $x = $split[0]
@@ -25,47 +31,69 @@
 		 $x_center = int($x / 2)
 		 $y_center = int($y / 2)
 
-		 $command = 'magick ' & $filename & ' -crop ' & $geometry & ' shape' & $j & '.png'
+			;color data for the target object --> $color[r, g, b]
+			$colors = StringReplace($colors, '%', '')
+			$split = stringsplit($colors, '()', 2)
+			$colors = $split[1]
+			$split = stringsplit($colors, ',', 2)
+			$red   = round(255 * number($split[0]) / 100)
+			$green = round(255 * number($split[1]) / 100)
+			$blue  = round(255 * number($split[2]) / 100)
+			$colors = 'rgb(' & $red & ',' & $green & ',' & $blue & ')'
+
+		 ;GOOD
+		 $command = 'magick islands.png -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -fill black +opaque ' & $colors & ' -fill white -opaque ' & $colors & ' -canny 1x1+50%+90% -threshold 50% -type bilevel pixels.txt'
 		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
 
-		 ;convert bounding box of object into a bunch of lines drawing the object boundaries. it is messy
-		 $command = 'magick ' & $filename & ' -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -canny 1x1+50%+90% -crop ' & $x+1 & 'x' & $y+1 & '+' & $x_offset+1 & '+' & $y_offset+1 & ' edges.png'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made edges.png')
+		 ;$command = 'magick islands.png -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -fill black +opaque ' & $colors & ' -fill white -opaque ' & $colors & ' -canny 1x1+50%+90% TEST.png'
+		 ;runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+		 ;$command = 'magick TEST.png -threshold 50% -type bilevel TESTPIXELS.txt'
+		 ;runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
 
-		 ;generate a mask of the object
-		 ; $command = 'magick cutout.png -fill white -draw "color ' & $x_center & ',' & $y_center & ' floodfill" -fill red -draw "color ' & $x_center & ',' & $y_center & ' floodfill" -fill black -opaque white -fill white -opaque red mask.png'
-		 ; runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ; msgbox(1,'paused', 'just made mask.png')
+		 ;there are too many pixels in pixels.txt. i don't think an edge is ebing output correctly, i think the entire shape is.
+		 ;i think i was mistaken
 
-		 $command = 'magick edges.png -fill white -draw "color ' & $x_center & ',' & $y_center & ' floodfill" mask1.png'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made mask1.png')
+		 ;magick isolated1.png -fill black +opaque rgb(99.1157%,99.1157%,63.3966%) isolated2.png
 
-		 $command = 'magick mask1.png -fill red -draw "color ' & $x_center & ',' & $y_center & ' floodfill" mask2.png'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made mask2.png')
+		 #cs
+			;convert bounding box of object into a bunch of lines drawing the object boundaries. it is messy
+			$command = 'magick ' & $filename & ' -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -canny 1x1+50%+90% -crop ' & $x+1 & 'x' & $y+1 & '+' & $x_offset+1 & '+' & $y_offset+1 & ' edges.png'
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made edges.png')
 
-		 $command = 'magick mask2.png -fill black -opaque white mask3.png'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made mask3.png')
+			;generate a mask of the object
+			 $command = 'magick cutout.png -fill white -draw "color ' & $x_center & ',' & $y_center & ' floodfill" -fill red -draw "color ' & $x_center & ',' & $y_center & ' floodfill" -fill black -opaque white -fill white -opaque red mask.png'
+			 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			; msgbox(1,'paused', 'just made mask.png')
 
-		 $command = 'magick mask3.png -fill white -opaque red mask4.png'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made mask4.png')
+			$command = 'magick edges.png -fill white -draw "color ' & $x_center & ',' & $y_center & ' floodfill" mask1.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask1.png')
 
+			$command = 'magick mask1.png -fill red -draw "color ' & $x_center & ',' & $y_center & ' floodfill" mask2.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask2.png')
 
-		 ;apply mask edges to produce a clean edge
-		 $command = 'composite -compose multiply mask4.png edges.png edges.png'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made clean edges.png')
+			$command = 'magick mask2.png -fill black -opaque white mask3.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask3.png')
 
-		 ;get the edge points
-		 $command = 'convert edges.png -threshold 50% -type bilevel pixels.txt'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made pixels.txt')
+			$command = 'magick mask3.png -fill white -opaque red mask4.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask4.png')
 
-		 ;make array for the x and y positions for all white edge pixels
+			;apply mask edges to produce a clean edge
+			$command = 'composite -compose multiply mask4.png edges.png edges.png'	;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made clean edges.png')
+
+			;get the edge points
+			;$command = 'convert edges.png -threshold 50% -type bilevel pixels.txt'
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made pixels.txt')
+		 #ce
+
+		 ;make arrays for the x and y positions for all white edge pixels
 		 $pixels = FileReadToArray('pixels.txt')
 		 for $k = 1 to ubound($pixels) - 1
 			if StringInStr($pixels[$k], 'FF') then
@@ -116,20 +144,20 @@
 		 wend
 
 		 ;convert waveform into an array of strings of lines for imagemagick to draw
-		 local $waveform[360]
-		 for $k = 0  to 359
-			$waveform[$k] = 'line ' & $k &','& 0 &' '& $k &','& $dists[$k]
-		 next
-		 $lines = FileOpen('lines.txt', 10)
-		 FileWrite($lines, '')
-		 _FileWriteFromArray($lines, $waveform)
-		 FileClose($lines)
+		 #cs
+			local $waveform[360]
+			for $k = 0  to 359
+			   $waveform[$k] = 'line ' & $k &','& 0 &' '& $k &','& $dists[$k]
+			next
+			$lines = FileOpen('lines.txt', 10)
+			FileWrite($lines, '')
+			_FileWriteFromArray($lines, $waveform)
+			FileClose($lines)
 
-		 ;draw and output the waveform
-		 $command = 'magick -size 360x300 xc:white -stroke black -draw @lines.txt waveform' & $j & '.png'
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', 'just made waveform')
-
+			;draw and output the waveform
+			;$command = 'magick -size 360x300 xc:white -stroke black -draw @lines.txt waveform' & $j & '.png'
+			;runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+		 #ce
 
 
 		 ; construct barcode
@@ -147,29 +175,112 @@
 			endif
 		 next
 
+
 		 ;convert barcode into an array of strings of lines for imagemagick to draw
-		 local $barcode_text[360]
-		 for $k = 0  to 359
-			$barcode_text[$k] = 'line ' & $k &','& 0 &' '& $k &','& $barcode[$k] * 300
-		 next
-		 $bars = FileOpen('barcode.txt', 10)
-		 FileWrite($bars, '')
-		 _FileWriteFromArray($bars, $barcode_text)
-		 FileClose($bars)
+		 #cs
+			local $barcode_text[360]
+			for $k = 0  to 359
+			   $barcode_text[$k] = 'line ' & $k &','& 0 &' '& $k &','& $barcode[$k] * 300
+			next
+			$bars = FileOpen('barcode.txt', 10)
+			FileWrite($bars, '')
+			_FileWriteFromArray($bars, $barcode_text)
+			FileClose($bars)
 
-		 ;draw and output the barcode
-		 $command = 'magick -size 360x300 xc:white -stroke black -draw @barcode.txt barcode' & $j & '.png'
-		 clipput($command)
-		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
-		 ;msgbox(1,'paused', $j & ' difference: ' & $dif)
+			;draw and output the barcode
+			$command = 'magick -size 360x300 xc:white -stroke black -draw @barcode.txt barcode' & $j & '.png'
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+
+		 #ce
 
 
+		 ;PRODUCE TRAINING DATA
+		 #cs
+			$dataset = fileopen(@scriptdir & '\data\moons.txt', 9)
+			$interim = $barcode
+			for $k = 1 to 358
+			   $a_start = _ArrayExtract($barcode, 0, $k)
+			   $a_end   = _ArrayExtract($barcode, $k + 1, 359)
+			   $text    = _ArrayToString($a_end, '') & _ArrayToString($a_start, '')
+			   FileWrite($dataset, $text & @CRLF)
+
+			next
+		 #ce
+
+		 ;COMPARE TO DATASETS
+		 ;#cs
+			$best = 0
+			local $tally[6] = [0, 0, 0, 0, 0, 0]
+			local $datasets[6] = ['circles.txt', 'hearts.txt', 'triangles.txt', 'squares.txt', 'rectangles.txt', 'moons.txt']
+			for $s = 0 to ubound($datasets) - 1
+			   $set = FileReadToArray(@scriptdir & '\data\' & $datasets[$s])
+
+			   ;iterate through each line
+			   for $l = 0 to ubound($set) - 1
+				  $line = stringsplit($set[$l], '', 2)
+				  ;_arraydisplay($line, 'line')
+
+				  $same = 0
+				  ;iterate through each char
+				  for $c = 0 to ubound($line) - 1
+					 ;msgbox(1, '', 'this:' & $dists[$c] & '  char:' &  $line[$c])
+					 if $barcode[$c] = $line[$c] then
+						$same += 1
+					 endif
+				  next
+
+				  if $same > 300 then $tally[$s] += 1
+			   next
+
+			   ;determine which set has been closest at the end of every dataset
+			   if $s = 0 then
+				  $best = $s
+			   elseif $tally[$s] > $tally[$s - 1] then
+				  $best = $s
+			   endif
+			next
+
+		 msgbox(1,'best is', $datasets[$best])
+		 _arraydisplay($tally, 'similarity counts')
+		 ;#ce
 
 
+		; msgbox(1,'paused',$j)
 
 
 	  endif
    next
+
+
+
+
+
+
+
+#cs		;determine which set has been closest at the end of every dataset
+			if $s = 0 then
+			   $best = $s
+			elseif $tally[$s] > $tally[$s - 1] then
+			   $best = $s
+			endif
+		 next
+
+		 $s_total   = $tally[0] + $tally[1] + $tally[2] + $tally[3] + $tally[4]
+		 $s_percent = int(($tally[$best] / $s_total) * 100)
+
+		 msgbox(1,'shape identified', $datasets[$best] & ': ' & $s_percent & '%')
+		 _arraydisplay($tally, 'similarity counts')
+
+
+		; msgbox(1,'paused',$j)
+#ce
+
+
+
+
+
+
+
 
 
 
