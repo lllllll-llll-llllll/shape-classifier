@@ -31,18 +31,67 @@
 		 $x_center = int($x / 2)
 		 $y_center = int($y / 2)
 
-		;color data for the target object --> $color[r, g, b]
-		$colors = StringReplace($colors, '%', '')
-		$split = stringsplit($colors, '()', 2)
-		$colors = $split[1]
-		$split = stringsplit($colors, ',', 2)
-		$red   = round(255 * number($split[0]) / 100)
-		$green = round(255 * number($split[1]) / 100)
-		$blue  = round(255 * number($split[2]) / 100)
-		$colors = 'rgb(' & $red & ',' & $green & ',' & $blue & ')'
+			;color data for the target object --> $color[r, g, b]
+			$colors = StringReplace($colors, '%', '')
+			$split = stringsplit($colors, '()', 2)
+			$colors = $split[1]
+			$split = stringsplit($colors, ',', 2)
+			$red   = round(255 * number($split[0]) / 100)
+			$green = round(255 * number($split[1]) / 100)
+			$blue  = round(255 * number($split[2]) / 100)
+			$colors = 'rgb(' & $red & ',' & $green & ',' & $blue & ')'
 
+		 ;GOOD
 		 $command = 'magick islands.png -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -fill black +opaque ' & $colors & ' -fill white -opaque ' & $colors & ' -canny 1x1+50%+90% -threshold 50% -type bilevel pixels.txt'
 		 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+
+		 ;$command = 'magick islands.png -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -fill black +opaque ' & $colors & ' -fill white -opaque ' & $colors & ' -canny 1x1+50%+90% TEST.png'
+		 ;runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+		 ;$command = 'magick TEST.png -threshold 50% -type bilevel TESTPIXELS.txt'
+		 ;runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+
+		 ;there are too many pixels in pixels.txt. i don't think an edge is ebing output correctly, i think the entire shape is.
+		 ;i think i was mistaken
+
+		 ;magick isolated1.png -fill black +opaque rgb(99.1157%,99.1157%,63.3966%) isolated2.png
+
+		 #cs
+			;convert bounding box of object into a bunch of lines drawing the object boundaries. it is messy
+			$command = 'magick ' & $filename & ' -crop ' & $geometry & ' +append -bordercolor black -border 2x2 -canny 1x1+50%+90% -crop ' & $x+1 & 'x' & $y+1 & '+' & $x_offset+1 & '+' & $y_offset+1 & ' edges.png'
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made edges.png')
+
+			;generate a mask of the object
+			 $command = 'magick cutout.png -fill white -draw "color ' & $x_center & ',' & $y_center & ' floodfill" -fill red -draw "color ' & $x_center & ',' & $y_center & ' floodfill" -fill black -opaque white -fill white -opaque red mask.png'
+			 runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			; msgbox(1,'paused', 'just made mask.png')
+
+			$command = 'magick edges.png -fill white -draw "color ' & $x_center & ',' & $y_center & ' floodfill" mask1.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask1.png')
+
+			$command = 'magick mask1.png -fill red -draw "color ' & $x_center & ',' & $y_center & ' floodfill" mask2.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask2.png')
+
+			$command = 'magick mask2.png -fill black -opaque white mask3.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask3.png')
+
+			$command = 'magick mask3.png -fill white -opaque red mask4.png' ;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made mask4.png')
+
+			;apply mask edges to produce a clean edge
+			$command = 'composite -compose multiply mask4.png edges.png edges.png'	;disabled
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made clean edges.png')
+
+			;get the edge points
+			;$command = 'convert edges.png -threshold 50% -type bilevel pixels.txt'
+			runwait(@ComSpec & " /c " & $command, "", @SW_HIDE)
+			;msgbox(1,'paused', 'just made pixels.txt')
+		 #ce
 
 		 ;make arrays for the x and y positions for all white edge pixels
 		 $pixels = FileReadToArray('pixels.txt')
@@ -117,7 +166,6 @@
 		 for $k = 0 to 359
 			;if $dists[$k] > $max / 2 then
 			;if $dists[$k] > $max * 0.7 then
-			;msgbox(1,'', (($max - $min) / 2) + $min)
 			if $dists[$k]  > (($max - $min) / 2) + $min then
 			;if $dists[$k] > ((($max - $min) / 2) + $min * (1 - $dif / 2) )  then
 			   $barcode[$k] = 1
@@ -191,16 +239,51 @@
 			   endif
 			next
 
-		 msgbox(1,'best is', $datasets[$best])
+		 $s_total   = $tally[0] + $tally[1] + $tally[2] + $tally[3] + $tally[4] + $tally[5]
+		 $s_percent = int(($tally[$best] / $s_total) * 100) &  '%'
+
+
+		 ;msgbox(1,'best is', $datasets[$best])
+		 msgbox(1, $datasets[$best], 'confidence:' & $s_percent)
 		 _arraydisplay($tally, 'similarity counts')
 		 ;#ce
 
 
-		;msgbox(1,'paused',$j)
+		; msgbox(1,'paused',$j)
 
 
 	  endif
    next
+
+
+
+
+
+
+
+#cs		;determine which set has been closest at the end of every dataset
+			if $s = 0 then
+			   $best = $s
+			elseif $tally[$s] > $tally[$s - 1] then
+			   $best = $s
+			endif
+		 next
+
+		 $s_total   = $tally[0] + $tally[1] + $tally[2] + $tally[3] + $tally[4]
+		 $s_percent = int(($tally[$best] / $s_total) * 100)
+
+		 msgbox(1,'shape identified', $datasets[$best] & ': ' & $s_percent & '%')
+		 _arraydisplay($tally, 'similarity counts')
+
+
+		; msgbox(1,'paused',$j)
+#ce
+
+
+
+
+
+
 
 
 
