@@ -259,28 +259,13 @@
 
 
 
+; the classification process can perhaps be improved by looking toward the game of 20q for inspiration
+; instead of looking at everything, you look at only 2 things, then depending on which is more accurate, look into 2 sub-things of that thing
+; to start with, we can first measure the ratio of peaks to determine roundness
+; if it is mostly round, we can search through round-shapes, like pentagon, hexagon, octagon, moons?
+; if it isn't very round, we can compare rectangles, squares, stars
 
-
-#cs		;determine which set has been closest at the end of every dataset
-			if $s = 0 then
-			   $best = $s
-			elseif $tally[$s] > $tally[$s - 1] then
-			   $best = $s
-			endif
-		 next
-
-		 $s_total   = $tally[0] + $tally[1] + $tally[2] + $tally[3] + $tally[4]
-		 $s_percent = int(($tally[$best] / $s_total) * 100)
-
-		 msgbox(1,'shape identified', $datasets[$best] & ': ' & $s_percent & '%')
-		 _arraydisplay($tally, 'similarity counts')
-
-
-		; msgbox(1,'paused',$j)
-#ce
-
-
-
+; the question is how to determine the roundness of an object.
 
 
 
